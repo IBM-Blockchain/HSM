@@ -3,7 +3,7 @@
 - The following instructions require a Docker Hub account.
 - You will need to provide a PVC storage class.
 
-# Build and push PCKS #11 proxy image
+# Build and push PKCS #11 proxy image
 
 Change the DOCKER_HUB configuration according to your environment.
 
