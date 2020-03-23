@@ -108,23 +108,23 @@ Replace
 
 ## Create an image pull policy
 
-Copy below [ImagePolicy tempalte](#template-of-imangepolicy) and then replace `<DOCKER_HUB>` with the address your docker server. Can take [image-policy-ibmcom.yaml](!./deployment/image-policy-ibmcom.yaml) as reference.
+Copy below [ImagePolicy tempalte](#template-of-imangepolicy) and then replace `<DOCKER_HUB>` with the address your docker server. Can take [image-policy.yaml](!./deployment/image-policy.yaml) as reference.
 
 ### Template of ImangePolicy
 ```
 apiVersion: securityenforcement.admission.cloud.ibm.com/v1beta1
 kind: ImagePolicy
 metadata:
-  name: image-policy-ibmcom
+  name: image-policy-pkcs11-proxy
 spec:
   repositories:
   - name: <DOCKER_HUB>
 ```
 
-Apply this policy to your Kubernetes namespace, take [image-policy-ibmcom.yaml](!./deployment/image-policy-ibmcom.yaml) as an example.
+Apply this policy to your Kubernetes namespace, take [image-policy.yaml](!./deployment/image-policy.yaml) as an example.
 
 ```
-kubectl apply -f image-policy-ibmcom.yaml -n <namespace>
+kubectl apply -f image-policy.yaml -n <namespace>
 ```
 
 ## Create PVC
@@ -150,6 +150,34 @@ Apply this pvc to your Kubernetes namespace, take [opencryptoki-token-pvc.yaml](
 
 ```
 kubectl apply -f opencryptoki-token-pvc.yaml -n <namespace>
+```
+
+## Create Pod Security Policy
+
+Copy below [Cluster Role Binding tempate](#template-of-cluster-role-binding) and the replace `<NAMESPACE>` as your env. Can take [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml) as reference.
+
+### Template of Cluster Role Binding
+```
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pkcs11-proxy-clusterrolebinding
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:serviceaccounts:<NAMESPACE>
+roleRef:
+  kind: ClusterRole
+  name: pkcs11-proxy-clusterrole
+  apiGroup: rbac.authorization.k8s.io
+```
+
+Then create `<psp>`, `<clusterrole>`, `<clusterrolebinding>`, take below as example
+
+```
+kubectl apply -f psp.yaml
+kubectl apply -f clusterrole.yaml
+kubectl apply -f clusterrolebinding.yaml
 ```
 
 ## Deploy the image
