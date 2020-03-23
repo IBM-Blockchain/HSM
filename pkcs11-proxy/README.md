@@ -13,7 +13,7 @@ Use these steps to build a Docker image that contains the PKCS #11 proxy that en
 
 ## Provide your HSM slot configuration
 
-Before you can build the Docker image, you need to provide your HSM slot label, PIN, and initialization code by editing the [`entrypoint.sh`]((!./docker-image/entrypoint.sh) file.  
+Before you can build the Docker image, you need to provide your HSM slot label, PIN, and initialization code by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file.  
 
 Replace the following variables:
 
@@ -72,6 +72,8 @@ pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
 
 ## Build Docker image
 
+Run the following command to build the Docker image:
+
 ```
 docker build -t pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
 ```
@@ -79,11 +81,12 @@ docker build -t pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
 ## Push Docker image
 
 Run the following set of commands to push the Docker image to your Docker Hub repository.
+
 Replace:
 
-  - Replace `<DOCKER_HUB>` with the address your Docker server.
-  - Replace `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
-  - Replace `<DOCKER_HUB_PWD>` with your Docker Hub password.
+  - `<DOCKER_HUB>` with the address your Docker server.
+  - `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
+  - `<DOCKER_HUB_PWD>` with your Docker Hub password.
 
 ```
 DOCKER_HUB=<DOCKER_HUB>
@@ -95,12 +98,12 @@ docker push $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 
 Examples of these commands are provided in the following files:
 
-- [docker-image-build.sh](!./docker-image/docker-image-build.sh)
-- [docker-image-push.sh](!./docker-image/docker-image-push.sh)
+- [docker-image-build.sh](./docker-image/docker-image-build.sh)
+- [docker-image-push.sh](./docker-image/docker-image-push.sh)
 
 # Deploy the image to Kubernetes
 
-After you have built the image, there are a few additional tasks you need to perform before you deploy the Docker image.
+After you have built the image, there are a few additional tasks you need to perform before you can deploy the Docker image.
 
 ## Create a Docker registry secret
 
@@ -123,7 +126,7 @@ Replacing:
 
 ## Create an image pull policy
 
-Edit the [image-policy.yaml](!./deployment/image-policy.yaml) file replacing `<DOCKER_HUB>` with the address your Docker server.
+Edit the [image-policy.yaml](./deployment/image-policy.yaml) file replacing `<DOCKER_HUB>` with the address your Docker server.
 
 ### `imagePolicy.yaml` template
 ```yaml
@@ -146,7 +149,7 @@ Replacing:
 
 ## Create PVC
 
-Edit the [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the `<STORAGECLASS_NAME>` variable.
+Edit the [opencryptoki-token-pvc.yaml](./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the `<STORAGECLASS_NAME>` variable.
 
 ### `opencryptoki-token-pvc.yaml` template
 ```
@@ -175,11 +178,11 @@ Replacing:
 ## Create Security Policy
 
 The Security Policy is based on three configuration files:
-- [psp.yaml](!./deployment/psp.yaml)
-- [clusterrole.yaml](!./deployment/clusterrole.yaml)
-- [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml)
+- [psp.yaml](./deployment/psp.yaml)
+- [clusterrole.yaml](./deployment/clusterrole.yaml)
+- [clusterrolebinding.yaml](./deployment/clusterrolebinding.yaml)
 
-No modifications are required for the `psp.yaml` or the `clusterrole.yaml` files. But you do need to edit the [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml) file and replace
+No modifications are required for the `psp.yaml` or the `clusterrole.yaml` files. But you do need to edit the [clusterrolebinding.yaml](./deployment/clusterrolebinding.yaml) file and replace
 `<NAMESPACE>` with the namespace of your Kubernetes cluster.
 
 ### `clusterrolebinding.yaml` template
@@ -208,7 +211,7 @@ kubectl apply -f clusterrolebinding.yaml
 
 ## Deploy the image
 
-Edit the [pkcs11-proxy-opencryptoki.yaml](!./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
+Edit the [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
 
 Replace:
 - `<IBPREPO-KEY-SECRET>` with the name of the docker-registry secret that you created in a previous [step](#create-a-docker-registry-secret). For example, `ibprepo-key-secret`.
@@ -307,7 +310,7 @@ Replacing:
 
 # Test your deployment
 
-Run the pkcs11-tool to test the setup. Ensure that /usr/local/lib/libpkcs11-proxy.so is installed on your local machine.
+Run the pkcs11-tool to test the setup. Ensure that `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine.
 
 Run the following command:
 ```
@@ -320,7 +323,7 @@ Replacing:
 - `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
 - `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
 
-**Note:** If you changed the values of the port in the `pkcs11-proxy-opencryptoki.yaml` file, you would need to specify that port here in place of `2345`.
+**Note:** If you changed the values of the port in the `pkcs11-proxy-opencryptoki.yaml` file, you would need to specify that value here in place of `2345`.
 
 For example:
 ```
