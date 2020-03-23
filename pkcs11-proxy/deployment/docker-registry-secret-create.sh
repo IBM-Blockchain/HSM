@@ -1,7 +1,6 @@
 
 #!/bin/bash -ux
 
-#DOCKER_HUB=us.icr.io/ibp-temp/
 DOCKER_HUB=<DOCKER_HUB>
 DOCKER_HUB_ID=<DOCKER_HUB_ID>
 DOCKER_HUB_PWD=<DOCKER_HUB_PWD>

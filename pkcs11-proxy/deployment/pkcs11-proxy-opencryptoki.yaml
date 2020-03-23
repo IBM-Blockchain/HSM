@@ -60,15 +60,6 @@ spec:
           initialDelaySeconds: 15
           timeoutSeconds: 5
           periodSeconds: 5
-        env:
-        - name: EP11_SLOT_NO
-          value: '4'
-        - name: EP11_SLOT_TOKEN_LABEL
-          value: 'PKCS11'
-        - name: EP11_SLOT_SO_PIN
-          value: '87654313'
-        - name: EP11_SLOT_USER_PIN
-          value: '87654312'
         volumeMounts:
         - name: token-object-storage
           mountPath: /var/lib/opencryptoki
