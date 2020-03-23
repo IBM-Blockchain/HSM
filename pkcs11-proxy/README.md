@@ -1,22 +1,30 @@
-# Before you begin
+# Deployment instructions
+
+This README describes how to build the PKCS #11 proxy and Docker image for openCryptoki HSM and then deploy it to your Kubernetes cluster so that your blockchain node can use the HSM to manage its private key. After you complete this process you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
+
+## Before you begin
 
 - The following instructions require a Docker Hub account.
-- You will need to provide a PVC storage class.
+- You will need to provide a storage class for your PVC.
 
 # Build and push PKCS #11 proxy image
 
-## Change your HSM slot configuration
+Use these steps to build a Docker image that contains the PKCS #11 proxy that enables communications with the HSM and push it to your Docker registry.
 
-Before build docker images, some HSM configuraitons in **`entrypoint.sh`** are required to adapt according to your environmment, copy below [`entrypoint.sh`](#template-of-entrypointsh-file) template and then update the following variables (you can take [entrypoint.sh](!.../../docker-image/entrypoint.sh) as reference)
+## Provide your HSM slot configuration
 
-**\<EP11_SLOT_TOKEN_LABEL\>**: Specify the token label of the slot to use, which can be referenced as "HSM label" of IBP HSM configuration panel
+Before you can build the Docker image, you need to provide your HSM slot label, PIN, and initialization code by editing the [`entrypoint.sh`]((!./docker-image/entrypoint.sh) file.  
 
-**\<EP11_SLOT_SO_PIN\>**: Specify the initialization code of the slot
+Replace the following variables:
 
-**\<EP11_SLOT_USER_PIN\>**: Specify the user pin of the slot, which can be referenced as "HSM PIN" of IBP HSM configuration panel
+- **`<EP11_SLOT_TOKEN_LABEL>`**: Specify the token label of the slot to use. **Record this value because it is required when you configure an IBM Blockchain Platform node to use this HSM.**
 
-### Template of `entrypoint.sh` file
-```
+- **`<EP11_SLOT_SO_PIN>`**: Specify the initialization code of the slot.
+
+- **`<EP11_SLOT_USER_PIN>`**: Specify the HSM PIN for the slot. **Record this value because it is required when you configure an IBM Blockchain Platform node to use this HSM.**
+
+### `entrypoint.sh` Template
+```sh
 #!/bin/bash -ux
 
 EXISTED_EP11TOK=$(ls /var/lib/opencryptoki)
@@ -49,69 +57,76 @@ SLOT_SO_PIN=${EP11_SLOT_SO_PIN:-"<EP11_SLOT_SO_PIN>"}
 SLOT_USER_PIN=${EP11_SLOT_USER_PIN:-"<EP11_SLOT_USER_PIN>"}
 
 EXISTED_LABEL=$(pkcsconf -t | grep -w ${SLOT_TOKEN_LABEL})
-if [ -z "$EXISTED_LABEL" ] 
+if [ -z "$EXISTED_LABEL" ]
 then
   echo "initailized slot: "${SLOT_NO}
   printf "87654321\n${SLOT_TOKEN_LABEL}\n" | pkcsconf -I -c ${SLOT_NO}
   printf "87654321\n${SLOT_SO_PIN}\n${SLOT_SO_PIN}\n" | pkcsconf -P -c ${SLOT_NO}
   printf "${SLOT_SO_PIN}\n${SLOT_USER_PIN}\n${SLOT_USER_PIN}\n" | pkcsconf -u -c ${SLOT_NO}
-else 
+else
   echo "The slot already initailized!"
 fi
 
 pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
-``` 
+```
 
-## Build docker image
+## Build Docker image
 
 ```
 docker build -t pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
 ```
 
-## Push docker image
+## Push Docker image
+
+Run the following set of commands to push the Docker image to your Docker Hub repository.
+Replace:
+
+  - Replace `<DOCKER_HUB>` with the address your Docker server.
+  - Replace `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
+  - Replace `<DOCKER_HUB_PWD>` with your Docker Hub password.
 
 ```
 DOCKER_HUB=<DOCKER_HUB>
-DOCKER_HUB_ID=<DOCKER_HUB_ID>
-DOCKER_HUB_PWD=<DOCKER_HUB_PWD>
 
 docker tag pkcs11-proxy-opencryptoki:s390x-1.0.0 $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 docker login -u <DOCKER_HUB_ID> -p <DOCKER_HUB_PWD> $DOCKER_HUB
 docker push $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 ```
 
-Take below as example to build and push docker image
+Examples of these commands are provided in the following files:
 
-```
-./docker-image/docker-image-build.sh
-./docker-image/docker-image-push.sh
-```
+- [docker-image-build.sh](!./docker-image/docker-image-build.sh)
+- [docker-image-push.sh](!./docker-image/docker-image-push.sh)
 
-# Deploy the image to Kubernates
+# Deploy the image to Kubernetes
+
+After you have built the image, there are a few additional tasks you need to perform before you deploy the Docker image.
 
 ## Create a Docker registry secret
+
+Run the following commands to create a Kubernetes secret named `ibprepo-key-secret` to store your Docker image pull secret.
 
 ```
 DOCKER_HUB=<DOCKER_HUB>
 DOCKER_HUB_ID=<DOCKER_HUB_ID>
 DOCKER_HUB_PWD=<DOCKER_HUB_PWD>
-namespace=<namespace>
+namespace=<NAMESPACE>
 
 kubectl create secret docker-registry ibprepo-key-secret --docker-server=$DOCKER_HUB   --docker-username=$DOCKER_HUB_ID --docker-password=$DOCKER_HUB_PWD --docker-email=$DOCKER_HUB_ID -n $namespace
 ```
 
-Replace
-- `<DOCKER_HUB>` with the address your docker server.
+Replacing:
+- `<DOCKER_HUB>` with the address your Docker server.
 - `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
-- `<DOCKER_HUB_PWD>` with your Docker Hub password
-- `<namespace>` with your Kubernetes namespace
+- `<DOCKER_HUB_PWD>` with your Docker Hub password.
+- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 ## Create an image pull policy
 
-Copy below [ImagePolicy tempalte](#template-of-imangepolicy) and then replace `<DOCKER_HUB>` with the address your docker server. Can take [image-policy.yaml](!./deployment/image-policy.yaml) as reference.
+Edit the [image-policy.yaml](!./deployment/image-policy.yaml) file replacing `<DOCKER_HUB>` with the address your Docker server.
 
-### Template of ImangePolicy
-```
+### `imagePolicy.yaml` template
+```yaml
 apiVersion: securityenforcement.admission.cloud.ibm.com/v1beta1
 kind: ImagePolicy
 metadata:
@@ -121,17 +136,19 @@ spec:
   - name: <DOCKER_HUB>
 ```
 
-Apply this policy to your Kubernetes namespace, take [image-policy.yaml](!./deployment/image-policy.yaml) as an example.
+Run the following command to apply this policy to your Kubernetes namespace:
 
 ```
-kubectl apply -f image-policy.yaml -n <namespace>
+kubectl apply -f image-policy.yaml -n <NAMESPACE>
 ```
+Replacing:
+- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 ## Create PVC
 
-Copy below [PVC tempalte](#template-of-pvc) and then replace `<storageclass-name>` with the name of your storage class. Can take [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) as reference.
+Edit the [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the `<STORAGECLASS_NAME>` variable.
 
-### Template of PVC
+### `opencryptoki-token-pvc.yaml` template
 ```
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -143,20 +160,29 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: <storageclass-name>
+  storageClassName: <STORAGECLASS_NAME>
 ```
 
-Apply this pvc to your Kubernetes namespace, take [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) as an example.
+Run the following command to apply this PVC to your Kubernetes namespace:
 
 ```
-kubectl apply -f opencryptoki-token-pvc.yaml -n <namespace>
+kubectl apply -f opencryptoki-token-pvc.yaml -n <NAMESPACE>
 ```
 
-## Create Pod Security Policy
+Replacing:
+- `<NAMESPACE>` with name of your Kubernetes namespace.
 
-Copy below [Cluster Role Binding tempate](#template-of-cluster-role-binding) and the replace `<NAMESPACE>` as your env. Can take [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml) as reference.
+## Create Security Policy
 
-### Template of Cluster Role Binding
+The Security Policy is based on three configuration files:
+- [psp.yaml](!./deployment/psp.yaml)
+- [clusterrole.yaml](!./deployment/clusterrole.yaml)
+- [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml)
+
+No modifications are required for the `psp.yaml` or the `clusterrole.yaml` files. But you do need to edit the [clusterrolebinding.yaml](!./deployment/clusterrolebinding.yaml) file and replace
+`<NAMESPACE>` with the namespace of your Kubernetes cluster.
+
+### `clusterrolebinding.yaml` template
 ```
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -172,7 +198,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-Then create `<psp>`, `<clusterrole>`, `<clusterrolebinding>`, take below as example
+Deploy the security policy by running the following commands:
 
 ```
 kubectl apply -f psp.yaml
@@ -182,17 +208,15 @@ kubectl apply -f clusterrolebinding.yaml
 
 ## Deploy the image
 
-Copy below [yaml file](#template-of-yaml-file) as deployment template, and you can take [pkcs11-proxy-opencryptoki.yaml](deployment/pkcs11-proxy-opencryptoki.yaml) as a reference.
+Edit the [pkcs11-proxy-opencryptoki.yaml](!./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
 
-Need to replace the following variables in template, and put the values of your own env:
+Replace:
+- `<IBPREPO-KEY-SECRET>` with the name of the docker-registry secret that you created in a previous [step](#create-a-docker-registry-secret). For example, `ibprepo-key-secret`.
+- `<LABEL-KEY>` with
+- `<LABEL-VALUE>` with the label of the Kubernetes node where the cryptographic card is installed.
+- `<IMAGE-TAG>` with the image tag that was created in the [Push Docker image](#push-docker-image) step. For example, `pkcs11-proxy-opencryptoki:s390x-1.0.0`.
 
-\<IBPREPO-KEY-SECRET\> : This is the name of created [docker-registry secret](#create-a-docker-registry-secret) of above step.
-
-\<LABEL-KEY\>: \<LABEL-VALUE\>  : This is the kubernates node label, on which crypto card is installed
-
-\<IMAGE-TAG\> : It's the image tag created at step: [Push docker image](#push-docker-image)
-
-### Template of yaml file
+### `pkcs11-proxy-opencryptoki.yaml` template
 
 ```
 ---
@@ -270,25 +294,33 @@ spec:
         emptyDir: {}
 ```
 
-Run the following commands to deploy the proxy to your cluster:
+**Note:** The port `2345` is hard-coded in this file but you can change it to suit your needs.
 
-Take [pkcs11-proxy-opencryptoki.yaml](deployment/pkcs11-proxy-opencryptoki.yaml) as an example:
+Run the following command to deploy the openCryptoki proxy to your Kubernetes cluster:
+
 ```
-kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <namespace>
+kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <NAMESPACE>
 ```
+Replacing:
+- `<NAMESPACE>` with name of your Kubernetes namespace.
+
 
 # Test your deployment
 
 Run the pkcs11-tool to test the setup. Ensure that /usr/local/lib/libpkcs11-proxy.so is installed on your local machine.
 
+Run the following command:
 ```
-PKCS11_PROXY_SOCKET="tcp://<ip address>:2345" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
+PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:2345" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
 
 ```
 
-Replace
-- `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified in the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
-- `<EP11_SLOT_USER_PIN>` with the value that you specified in the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
+Replacing:
+- `<IP_ADDRESS>` with the ip address of the node where the proxy is running.
+- `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
+- `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
+
+**Note:** If you changed the values of the port in the `pkcs11-proxy-opencryptoki.yaml` file, you would need to specify that port here in place of `2345`.
 
 For example:
 ```
@@ -296,4 +328,7 @@ PKCS11_PROXY_SOCKET="tcp://127.0.0.1:2345" pkcs11-tool --module=/usr/local/lib/l
 
 ```
 
-The output of this command would be similar to:
+The output of this command should look similar to:
+
+
+**Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
