@@ -3,7 +3,7 @@
 - The following instructions require a Docker Hub account.
 - You will need to provide a PVC storage class.
 
-# build and push image
+# Build and push PKCS #11 proxy image
 
 ## Change your HSM slot configuration
 
