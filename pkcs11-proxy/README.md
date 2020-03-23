@@ -3,29 +3,88 @@
 - The following instructions require a Docker Hub account.
 - You will need to provide a PVC storage class.
 
-# Build and push PKCS #11 proxy image
+# build and push image
 
-Change the DOCKER_HUB configuration according to your environment.
+## Change your HSM slot configuration
+
+Before build docker images, some HSM configuraitons in **`entrypoint.sh`** are required to adapt according to your environmment, copy below [`entrypoint.sh`](#template-of-entrypointsh-file) template and then update the following variables (you can take [entrypoint.sh](!.../../docker-image/entrypoint.sh) as reference)
+
+**\<EP11_SLOT_TOKEN_LABEL\>**: Specify the token label of the slot to use, which can be referenced as "HSM label" of IBP HSM configuration panel
+
+**\<EP11_SLOT_SO_PIN\>**: Specify the initialization code of the slot
+
+**\<EP11_SLOT_USER_PIN\>**: Specify the user pin of the slot, which can be referenced as "HSM PIN" of IBP HSM configuration panel
+
+### Template of `entrypoint.sh` file
+```
+#!/bin/bash -ux
+
+EXISTED_EP11TOK=$(ls /var/lib/opencryptoki)
+if [ -z "$EXISTED_EP11TOK" ]
+then
+  ## It's empty, then using default token configured
+  echo "Copy content for /var/lib/opencryptoki"
+  cp -rf /install/opencryptoki/* /var/lib/opencryptoki/
+else
+  ## using existed configured data
+  echo "To use existed configuration!"
+fi
+
+EXISTED_CFG=$(ls /etc/opencryptoki)
+if [ -z "$EXISTED_CFG" ]
+then
+  ## It's empty, then using default config
+  echo "Copy content for /var/lib/opencryptoki"
+  cp -rf /install/config/* /etc/opencryptoki/
+else
+  ## using existed configured data
+  echo "To use existed configuration!"
+fi
+
+service pkcsslotd start
+
+SLOT_NO=${EP11_SLOT_NO:-4}
+SLOT_TOKEN_LABEL=${EP11_SLOT_TOKEN_LABEL:-"<EP11_SLOT_TOKEN_LABEL>"}
+SLOT_SO_PIN=${EP11_SLOT_SO_PIN:-"<EP11_SLOT_SO_PIN>"}
+SLOT_USER_PIN=${EP11_SLOT_USER_PIN:-"<EP11_SLOT_USER_PIN>"}
+
+EXISTED_LABEL=$(pkcsconf -t | grep -w ${SLOT_TOKEN_LABEL})
+if [ -z "$EXISTED_LABEL" ] 
+then
+  echo "initailized slot: "${SLOT_NO}
+  printf "87654321\n${SLOT_TOKEN_LABEL}\n" | pkcsconf -I -c ${SLOT_NO}
+  printf "87654321\n${SLOT_SO_PIN}\n${SLOT_SO_PIN}\n" | pkcsconf -P -c ${SLOT_NO}
+  printf "${SLOT_SO_PIN}\n${SLOT_USER_PIN}\n${SLOT_USER_PIN}\n" | pkcsconf -u -c ${SLOT_NO}
+else 
+  echo "The slot already initailized!"
+fi
+
+pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
+``` 
+
+## Build docker image
 
 ```
-docker build -t ibmcom/pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
+docker build -t pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
+```
 
-#DOCKER_HUB=us.icr.io/ibp-temp
+## Push docker image
+
+```
 DOCKER_HUB=<DOCKER_HUB>
 DOCKER_HUB_ID=<DOCKER_HUB_ID>
 DOCKER_HUB_PWD=<DOCKER_HUB_PWD>
 
-docker tag ibmcom/pkcs11-proxy-opencryptoki:s390x-1.0.0 $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
+docker tag pkcs11-proxy-opencryptoki:s390x-1.0.0 $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 docker login -u <DOCKER_HUB_ID> -p <DOCKER_HUB_PWD> $DOCKER_HUB
 docker push $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 ```
 
-Then run:
+Take below as example to build and push docker image
 
 ```
-cd docker-image
-./docker-image-build.sh
-./docker-image-push.sh
+./docker-image/docker-image-build.sh
+./docker-image/docker-image-push.sh
 ```
 
 # Deploy the image to Kubernates
@@ -45,13 +104,13 @@ Replace
 - `<DOCKER_HUB>` with the address your docker server.
 - `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
 - `<DOCKER_HUB_PWD>` with your Docker Hub password
-- <namespace> with your Kubernetes namespace
+- `<namespace>` with your Kubernetes namespace
 
 ## Create an image pull policy
 
-Edit the file named ./deployment/image-policy-ibmcom.yaml. Replace
-`<DOCKER_HUB>` with the address your docker server.
+Copy below [ImagePolicy tempalte](#template-of-imangepolicy) and then replace `<DOCKER_HUB>` with the address your docker server. Can take [image-policy-ibmcom.yaml](!./deployment/image-policy-ibmcom.yaml) as reference.
 
+### Template of ImangePolicy
 ```
 apiVersion: securityenforcement.admission.cloud.ibm.com/v1beta1
 kind: ImagePolicy
@@ -62,22 +121,17 @@ spec:
   - name: <DOCKER_HUB>
 ```
 
-Apply this policy to your Kubernetes namespace.
+Apply this policy to your Kubernetes namespace, take [image-policy-ibmcom.yaml](!./deployment/image-policy-ibmcom.yaml) as an example.
 
 ```
-cd ./deployment
 kubectl apply -f image-policy-ibmcom.yaml -n <namespace>
 ```
 
-## Log in to the container registry
-
-<!-- Need more instructions here -->
-
 ## Create PVC
 
-Edit the file ./deployment/opencryptoki-token-pvc.yaml.
-Replace `<storageclass-name>` with the name of your storage class.
+Copy below [PVC tempalte](#template-of-pvc) and then replace `<storageclass-name>` with the name of your storage class. Can take [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) as reference.
 
+### Template of PVC
 ```
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -92,41 +146,25 @@ spec:
   storageClassName: <storageclass-name>
 ```
 
-example
+Apply this pvc to your Kubernetes namespace, take [opencryptoki-token-pvc.yaml](!./deployment/opencryptoki-token-pvc.yaml) as an example.
+
 ```
-cd ./deployment
 kubectl apply -f opencryptoki-token-pvc.yaml -n <namespace>
 ```
 
 ## Deploy the image
 
-Edit the ./deployment/pkcs11-proxy-opencryptoki.yaml file.
+Copy below [yaml file](#template-of-yaml-file) as deployment template, and you can take [pkcs11-proxy-opencryptoki.yaml](deployment/pkcs11-proxy-opencryptoki.yaml) as a reference.
 
-<!-- These variables do not exist in the .yaml file -->
-Replace the following variables:
+Need to replace the following variables in template, and put the values of your own env:
 
-\<label-key\>: \<label-value\>  : This is the kubernates node label, on which crypto card is installed
-<!-- Where is this in the .yaml?-->
+\<IBPREPO-KEY-SECRET\> : This is the name of created [docker-registry secret](#create-a-docker-registry-secret) of above step.
 
-\<image-tag\> : It's the image tag used used
-<!-- Where is this in the .yaml?-->
+\<LABEL-KEY\>: \<LABEL-VALUE\>  : This is the kubernates node label, on which crypto card is installed
 
+\<IMAGE-TAG\> : It's the image tag created at step: [Push docker image](#push-docker-image)
 
-\<slotno\> : It's the slot no of your environment, default is '4', if you want to change the value, you need put opencyrptoki config under a customized volume 'opencryptoki-config'
-
-<!-- Do you mean EP11_SLOT_NO -->
-
-\<token-label\>: It's the token label you want to initialized, default is 'PKCS11'
-
-<!-- Do you mean EP11_SLOT_TOKEN_LABEL -->
-
-\<so-pin\>: defualt is '87654313'
-
-<!-- Do you mean EP11_SLOT_SO_PIN -->
-
-\<user-pin\>: defualt is '87654312'
-
-<!-- Do you mean EP11_SLOT_USER_PIN -->
+### Template of yaml file
 
 ```
 ---
@@ -164,14 +202,14 @@ spec:
         app: pkcs11
     spec:
       imagePullSecrets:
-        - name: ibprepo-key-secret
+        - name: <IBPREPO-KEY-SECRET>
       securityContext:
         privileged: true
       nodeSelector:
-        <label-key>: <label-value>
+        <LABEL-KEY>: <LABEL-VALUE>
       containers:
       - name: proxy
-        image: <image-tag>
+        image: <IMAGE-TAG>
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 2345
@@ -191,15 +229,6 @@ spec:
           initialDelaySeconds: 15
           timeoutSeconds: 5
           periodSeconds: 5
-        env:
-        - name: EP11_SLOT_NO
-          value: <slotno>
-        - name: EP11_SLOT_TOKEN_LABEL
-          value: <token-label>
-        - name: EP11_SLOT_SO_PIN
-          value: <so-pin>
-        - name: EP11_SLOT_USER_PIN
-          value: <user-pin>
         volumeMounts:
         - name: token-object-storage
           mountPath: /var/lib/opencryptoki
@@ -215,8 +244,8 @@ spec:
 
 Run the following commands to deploy the proxy to your cluster:
 
+Take [pkcs11-proxy-opencryptoki.yaml](deployment/pkcs11-proxy-opencryptoki.yaml) as an example:
 ```
-cd ./deployment
 kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <namespace>
 ```
 
@@ -225,13 +254,13 @@ kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <namespace>
 Run the pkcs11-tool to test the setup. Ensure that /usr/local/lib/libpkcs11-proxy.so is installed on your local machine.
 
 ```
-PKCS11_PROXY_SOCKET="tcp://<ip address>:2345" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <token-label> --pin <user-pin> -t
+PKCS11_PROXY_SOCKET="tcp://<ip address>:2345" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
 
 ```
 
 Replace
-- `<token-label>` with the value that you specified in the `EP11_SLOT_TOKEN_LABEL` parameter in the pkcs11-proxy-opencryptoki.yaml file.
-- `<user-pin>` with the value that you specified in the `EP11_SLOT_USER_PIN` parameter in the pkcs11-proxy-opencryptoki.yaml file.
+- `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified in the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
+- `<EP11_SLOT_USER_PIN>` with the value that you specified in the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
 
 For example:
 ```
