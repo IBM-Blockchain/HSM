@@ -1,6 +1,7 @@
-# Deployment instructions
+# PKCS #11 Deployment instructions
 
 This README describes how to build the PKCS #11 proxy and Docker image for openCryptoki HSM and then deploy it to your Kubernetes cluster so that your blockchain node can use the HSM to manage its private key. After you complete this process you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
+
 
 ## Before you begin
 
@@ -9,7 +10,7 @@ This README describes how to build the PKCS #11 proxy and Docker image for openC
 
 # Build and push PKCS #11 proxy image
 
-Use these steps to build a Docker image that contains the PKCS #11 proxy that enables communications with the HSM and push it to your Docker registry.
+Use these steps to build a Docker image that contains the PKCS #11 proxy, which enables communications with the HSM, and push it to your Docker registry.
 
 ## Provide your HSM slot configuration
 
@@ -347,7 +348,7 @@ PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=<libpkcs11-
 ```
 
 Replacing:
-- `<IP_ADDRESS>:<PORT>`: 
+- `<IP_ADDRESS>:<PORT>`:
 
   Use below command to get IP Addresses of nodes in the kubernates cluster
 
@@ -368,7 +369,7 @@ NAME           STATUS   ROLES                                 AGE   VERSION     
   The master node IP Address (indicated by `INTERNAL-IP` field) is: `9.47.152.235`
 
 
-  Use below command to get the CLUSTER-IP and the interanl and external port of the service
+  Use below command to get the CLUSTER-IP and the internal and external port of the service
 
 ```sh
 kubectl get service pkcs11-proxy -n <NAMESPACE>
@@ -383,9 +384,9 @@ pkcs11-proxy   NodePort   10.0.163.235   <none>        2345:30846/TCP   20h
 ```
 For above example, `CLUSTER-IP` is `10.0.163.235`, Internal-port is `2345`, External-port is `30846`. There are two pairs of value can be used for `<IP_ADDRESS>:<PORT>`, one for Interal-port, another for External-port
 
-Internal-port pair: `<CLUSTER-IP>:<Internal-PORT>`, for above example is `10.0.163.235:2345`, this pair can be used when fabric entities (CA, PEER, Orderer) deployed in the same cluster
+Internal-port pair: `<CLUSTER-IP>:<Internal-PORT>`, for above example is `10.0.163.235:2345`, this pair can be used when fabric components (CA, PEER, Orderer) deployed in the same cluster
 
-External-port pair: `<Master-node-IP>:<External-PORT>`, for abvoe example is `9.47.152.235:30846`, this pair can be used when fabric entiries (CA, PEER, Orderer) deployed in the same cluster OR NOT in the same cluster
+External-port pair: `<Master-node-IP>:<External-PORT>`, for above example is `9.47.152.235:30846`, this pair can be used when fabric components (CA, PEER, Orderer) are deployed in the same cluster or NOT in the same cluster.
 
 - `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
 - `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
@@ -420,7 +421,7 @@ Decryption (currently only for RSA)
 No errors
 ```
 
-If the slot is already used by another session, below output is reasonalble:
+If the slot is already in use by another session, you might see the following output, which is reasonable:
 
 ```
 $ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
