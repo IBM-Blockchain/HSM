@@ -7,6 +7,7 @@ This README describes how to build the PKCS #11 proxy and Docker image for openC
 
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
+- These instructions assume you are comfortable with Kubernetes and kubectl commands.
 - You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you know the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
 # Build and push PKCS #11 proxy image
