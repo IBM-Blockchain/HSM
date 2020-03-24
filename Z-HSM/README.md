@@ -7,6 +7,7 @@ This README describes how to build the PKCS #11 proxy and Docker image for openC
 
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
+- You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you know the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
 # Build and push PKCS #11 proxy image
 
@@ -210,11 +211,11 @@ kubectl apply -f clusterrole.yaml
 kubectl apply -f clusterrolebinding.yaml
 ```
 
-### Create label for kubernates node
+## Create label for Kubernetes node
 
-Create a label for kubernates node, on which a IBM HSM card is installed. The label and value will be used during editing the deployment
+Create a label for the Kubernetes node where the IBM HSM card is installed. The label and value are required in a subsequent step when you deploy the image to your Kubernetes cluster.
 
-1. Get all nodes information including name in your cluster
+1. Run the following command to get information about all the nodes in cluster:
 
 ```sh
 kubectl get nodes
@@ -224,20 +225,28 @@ kubectl get nodes
 
 ```sh
 kubectl label node <NODENAME> --overwrite=true <LABEL-KEY>=<LABEL-VALUE>
-
-# for example
-# kubectl label node worker1 --overwrite=true HSM=installed
 ```
 
-Replace:
-- `<NODENAME>`: it is the node name in your cluster, on which the HSM cryptographic card is installed
-- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed, the pair will be used during edit deployment
+Replacing:
+- `<NODENAME>` with the name of the node in your cluster where the HSM cryptographic card is installed.
+- `<LABEL-KEY>` with the label you want to assign to this node, for example: `HSM`.
+- `<LABEL-VALUE>` with the value of the label key, for example `installed`.   
 
-3. Check if the label is created successfully by below command
+**Important:** Record the `<LABEL-KEY>`:`<LABEL-VALUE>` pair to provide it in a subsequent step.
+
+For example:
+```
+kubectl label node worker1 --overwrite=true HSM=installed
+```
+
+3. Verify that the label was created successfully by running the following command:
 
 ```sh
 kubectl get node <NODENAME> --show-labels=true
 ```
+Replacing:
+- `<NODENAME>` with the name of the node in your cluster where the HSM cryptographic card is installed.
+
 
 ## Deploy the image
 
@@ -339,55 +348,16 @@ Replacing:
 
 # Test your deployment
 
-Run the pkcs11-tool to test the setup. Ensure that `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine.
+Ensure that the PKCS #11 library `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine. Then run the pkcs11-tool to test the setup.
 
 Run the following command:
 ```
-PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
+PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
 
 ```
 
 Replacing:
-- `<IP_ADDRESS>:<PORT>`:
-
-  Use below command to get IP Addresses of nodes in the kubernates cluster
-
-```sh
-kubectl get node -o wide
-```
-
-  For example
-
-```sh
-$ kubectl get node -o wide
-NAME           STATUS   ROLES                                 AGE   VERSION          INTERNAL-IP    EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
-9.47.152.220   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.220   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
-9.47.152.235   Ready    etcd,management,master,proxy,worker   28d   v1.13.9+icp-ee   9.47.152.235   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
-9.47.152.236   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.236   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
-```
-
-  The master node IP Address (indicated by `INTERNAL-IP` field) is: `9.47.152.235`
-
-
-  Use below command to get the CLUSTER-IP and the internal and external port of the service
-
-```sh
-kubectl get service pkcs11-proxy -n <NAMESPACE>
-```
-
-For example
-```sh
-$ kubectl get service pkcs11-proxy -n pkcs11-proxy
-NAME           TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
-pkcs11-proxy   NodePort   10.0.163.235   <none>        2345:30846/TCP   20h
-
-```
-For above example, `CLUSTER-IP` is `10.0.163.235`, Internal-port is `2345`, External-port is `30846`. There are two pairs of value can be used for `<IP_ADDRESS>:<PORT>`, one for Interal-port, another for External-port
-
-Internal-port pair: `<CLUSTER-IP>:<Internal-PORT>`, for above example is `10.0.163.235:2345`, this pair can be used when fabric components (CA, PEER, Orderer) deployed in the same cluster
-
-External-port pair: `<Master-node-IP>:<External-PORT>`, for above example is `9.47.152.235:30846`, this pair can be used when fabric components (CA, PEER, Orderer) are deployed in the same cluster or NOT in the same cluster.
-
+- `<IP_ADDRESS>:<PORT>`: with the value returned from these [instructions](#how-to-find-your-cluster-ip-address).
 - `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
 - `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
 
@@ -431,3 +401,56 @@ Aborting.
 ```
 
 **Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
+
+## How to find your cluster ip address
+
+When you test your HSM, you need to provide the `<IP_ADDRESS>` and `<PORT>` of your HSM's PKCS #11 proxy.
+When all of your IBM Blockchain Platform components (CA, peer, ordering nodes) are local to the cluster, you can use either the internal IP address and port or external IP address and port. But if your blockchain components are not local to the cluster, then you must use the external IP address and port. These instructions describe how to get both pairs of values.
+
+### External IP address
+
+First, run the following command to get a list of IP Addresses for all the nodes in your Kubernetes cluster:
+
+```sh
+kubectl get node -o wide
+```
+
+For example:
+
+```sh
+$ kubectl get node -o wide
+NAME           STATUS   ROLES                                 AGE   VERSION          INTERNAL-IP    EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+9.47.152.220   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.220   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+9.47.152.235   Ready    etcd,management,master,proxy,worker   28d   v1.13.9+icp-ee   9.47.152.235   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+9.47.152.236   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.236   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+```
+
+Look for the row that contains the `master` node. In the example above, the `master` node IP Address (indicated by the `EXTERNAL-IP` field) is: `9.47.152.235`.
+
+
+### INTERNAL IP address and port
+
+Now run the following command to get the CLUSTER-IP address and the internal and external port of the service.
+
+```sh
+kubectl get service pkcs11-proxy -n <NAMESPACE>
+```
+Replacing:
+- `<NAMESPACE>` with name of your Kubernetes namespace.
+
+For example:
+```sh
+$ kubectl get service pkcs11-proxy -n pkcs11-proxy
+NAME           TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+pkcs11-proxy   NodePort   10.0.163.235   <none>        2345:30846/TCP   20h
+```
+
+From the example above, the internal `CLUSTER-IP` is `10.0.163.235` and the `Internal-port` is `2345`. The `External-port` is `30846`.
+
+### Putting it all together
+
+There are two pairs of values that can be used for the PKCS #11 Proxy `<IP_ADDRESS>:<PORT>`: one for `Internal-port`, and the other for `External-port`.
+
+`Internal-port` pair: `<CLUSTER-IP>:<Internal-PORT>`, from the Internal IP address and port example above, this value would be `10.0.163.235:2345`. This pair can be used when the IBM Blockchain Platform components (CA, peer, ordering node) are deployed in the same cluster.
+
+`External-port` pair: `<Master-node-IP>:<External-PORT>`, from the external IP address example above, this value would be `9.47.152.235:30846`.  This pair would be used when the IBM Blockchain Platform components (CA, peer, ordering nodes) are deployed either in the same cluster or are NOT in the same cluster.
