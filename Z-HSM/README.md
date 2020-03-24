@@ -254,7 +254,7 @@ Edit the [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki
 
 Replace:
 - `<IBPREPO-KEY-SECRET>` with the name of the docker-registry secret that you created in a previous [step](#create-a-docker-registry-secret). For example, `ibprepo-key-secret`.
-- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed.
+- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed, from the previous [step](#create-label-for-kubernetes-node).
 - `<IMAGE-TAG>` with the image tag that was created in the [Push Docker image](#push-docker-image) step. For example, `pkcs11-proxy-opencryptoki:s390x-1.0.0`.
 
 ### `pkcs11-proxy-opencryptoki.yaml` template
