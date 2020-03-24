@@ -152,7 +152,7 @@ Replacing:
 Edit the [opencryptoki-token-pvc.yaml](./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the `<STORAGECLASS_NAME>` variable.
 
 ### `opencryptoki-token-pvc.yaml` template
-```
+```yaml
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -186,7 +186,7 @@ No modifications are required for the `psp.yaml` or the `clusterrole.yaml` files
 `<NAMESPACE>` with the namespace of your Kubernetes cluster.
 
 ### `clusterrolebinding.yaml` template
-```
+```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -209,19 +209,47 @@ kubectl apply -f clusterrole.yaml
 kubectl apply -f clusterrolebinding.yaml
 ```
 
+### Create label for kubernates node
+
+Create a label for kubernates node, on which a IBM HSM card is installed. The label and value will be used during editing the deployment
+
+1. Get all nodes information including name in your cluster
+
+```sh
+kubectl get nodes
+```
+
+2. Create a label for your node, on which a IBM HSM card is installed
+
+```sh
+kubectl label node <NODENAME> --overwrite=true <LABEL-KEY>=<LABEL-VALUE>
+
+# for example
+# kubectl label node worker1 --overwrite=true HSM=installed
+```
+
+Replace:
+- `<NODENAME>`: it is the node name in your cluster, on which the HSM cryptographic card is installed
+- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed, the pair will be used during edit deployment
+
+3. Check if the label is created successfully by below command
+
+```sh
+kubectl get node <NODENAME> --show-labels=true
+```
+
 ## Deploy the image
 
 Edit the [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
 
 Replace:
 - `<IBPREPO-KEY-SECRET>` with the name of the docker-registry secret that you created in a previous [step](#create-a-docker-registry-secret). For example, `ibprepo-key-secret`.
-- `<LABEL-KEY>` with
-- `<LABEL-VALUE>` with the label of the Kubernetes node where the cryptographic card is installed.
+- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed.
 - `<IMAGE-TAG>` with the image tag that was created in the [Push Docker image](#push-docker-image) step. For example, `pkcs11-proxy-opencryptoki:s390x-1.0.0`.
 
 ### `pkcs11-proxy-opencryptoki.yaml` template
 
-```
+```yaml
 ---
 apiVersion: v1
 kind: Service
@@ -314,24 +342,91 @@ Run the pkcs11-tool to test the setup. Ensure that `/usr/local/lib/libpkcs11-pro
 
 Run the following command:
 ```
-PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:2345" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
+PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=<libpkcs11-proxy dll path> --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
 
 ```
 
 Replacing:
-- `<IP_ADDRESS>` with the ip address of the node where the proxy is running.
+- `<IP_ADDRESS>:<PORT>`: 
+
+  Use below command to get IP Addresses of nodes in the kubernates cluster
+
+```sh
+kubectl get node -o wide
+```
+
+  For example
+
+```sh
+$ kubectl get node -o wide
+NAME           STATUS   ROLES                                 AGE   VERSION          INTERNAL-IP    EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+9.47.152.220   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.220   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+9.47.152.235   Ready    etcd,management,master,proxy,worker   28d   v1.13.9+icp-ee   9.47.152.235   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+9.47.152.236   Ready    worker                                28d   v1.13.9+icp-ee   9.47.152.236   <none>        Ubuntu 18.04.4 LTS   4.15.0-88-generic   docker://18.9.7
+```
+
+  The master node IP Address (indicated by `INTERNAL-IP` field) is: `9.47.152.235`
+
+
+  Use below command to get the CLUSTER-IP and the interanl and external port of the service
+
+```sh
+kubectl get service pkcs11-proxy -n <NAMESPACE>
+```
+
+For example
+```sh
+$ kubectl get service pkcs11-proxy -n pkcs11-proxy
+NAME           TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+pkcs11-proxy   NodePort   10.0.163.235   <none>        2345:30846/TCP   20h
+
+```
+For above example, `CLUSTER-IP` is `10.0.163.235`, Internal-port is `2345`, External-port is `30846`. There are two pairs of value can be used for `<IP_ADDRESS>:<PORT>`, one for Interal-port, another for External-port
+
+Internal-port pair: `<CLUSTER-IP>:<Internal-PORT>`, for above example is `10.0.163.235:2345`, this pair can be used when fabric entities (CA, PEER, Orderer) deployed in the same cluster
+
+External-port pair: `<Master-node-IP>:<External-PORT>`, for abvoe example is `9.47.152.235:30846`, this pair can be used when fabric entiries (CA, PEER, Orderer) deployed in the same cluster OR NOT in the same cluster
+
 - `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
 - `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
 
-**Note:** If you changed the values of the port in the `pkcs11-proxy-opencryptoki.yaml` file, you would need to specify that value here in place of `2345`.
-
 For example:
 ```
-PKCS11_PROXY_SOCKET="tcp://127.0.0.1:2345" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
+PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
 
 ```
 
 The output of this command should look similar to:
 
+```
+$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
 
-**Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
+C_SeedRandom() and C_GenerateRandom():
+  seeding (C_SeedRandom) not supported
+  seems to be OK
+Digests:
+  all 4 digest functions seem to work
+  SHA-1: OK
+Signatures: not implemented
+Verify (currently only for RSA)
+  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813) -- non-RSA, skipping
+  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f) with 1 mechanism -- non-RSA, skipping
+  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656) with 1 mechanism -- non-RSA, skipping
+Unwrap: not implemented
+Decryption (currently only for RSA)
+  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813)  -- non-RSA, skipping
+  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f)  -- non-RSA, skipping
+  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656)  -- non-RSA, skipping
+No errors
+```
+
+If the slot is already used by another session, below output is reasonalble:
+
+```
+$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
+
+error: PKCS11 function C_Login failed: rv = CKR_USER_ALREADY_LOGGED_IN (0x100)
+Aborting.
+```
+
+**Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
