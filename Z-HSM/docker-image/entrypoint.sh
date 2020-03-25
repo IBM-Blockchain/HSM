@@ -40,5 +40,6 @@ else
   echo "The slot already initailized!"
 fi
 
-pkcs11-daemon ${LIBRARY_LOCATION}
+pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
+
 
