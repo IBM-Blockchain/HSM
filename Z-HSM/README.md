@@ -1,29 +1,27 @@
-# PKCS #11 Deployment instructions
+# PKCS #11 deployment instructions
 
-This README describes how to build the PKCS #11 proxy and Docker image for openCryptoki HSM and then deploy it to your Kubernetes cluster so that your blockchain node can use the HSM to manage its private key. After you complete this process you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
+This README describes how to build the PKCS #11 proxy into a Docker image and then deploy the image to your Kubernetes cluster so that your blockchain node can use the IBM Z openCryptoki HSM to manage its private key. After you complete this process, you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
 
 
 ## Before you begin
 
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
-- These instructions assume you are comfortable with Kubernetes and kubectl commands.
+- These instructions assume you are comfortable with Kubernetes and `kubectl` commands.
 - You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you know the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
-# Build and push PKCS #11 proxy image
+# Step 1. Build and push PKCS #11 proxy image
 
-Use these steps to build a Docker image that contains the PKCS #11 proxy, which enables communications with the HSM, and push it to your Docker registry.
+Use these steps to build a Docker image that contains the PKCS #11 proxy, which enables communications with the openCryptoki HSM, and push it to your Docker registry.
 
 ## Provide your HSM slot configuration
 
-Before you can build the Docker image, you need to provide your HSM slot label, PIN, and initialization code by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file.  
+Before you can build the Docker image, you need to provide your HSM slot label, initialization code, and PIN by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file.  
 
-Replace the following variables:
+Replace the following variables in the file:
 
 - **`<EP11_SLOT_TOKEN_LABEL>`**: Specify the token label of the slot to use. **Record this value because it is required when you configure an IBM Blockchain Platform node to use this HSM.**
-
 - **`<EP11_SLOT_SO_PIN>`**: Specify the initialization code of the slot.
-
 - **`<EP11_SLOT_USER_PIN>`**: Specify the HSM PIN for the slot. **Record this value because it is required when you configure an IBM Blockchain Platform node to use this HSM.**
 
 ### `entrypoint.sh` Template
@@ -67,7 +65,7 @@ then
   printf "87654321\n${SLOT_SO_PIN}\n${SLOT_SO_PIN}\n" | pkcsconf -P -c ${SLOT_NO}
   printf "${SLOT_SO_PIN}\n${SLOT_USER_PIN}\n${SLOT_USER_PIN}\n" | pkcsconf -u -c ${SLOT_NO}
 else
-  echo "The slot already initailized!"
+  echo "The slot already initialized!"
 fi
 
 pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
@@ -81,15 +79,17 @@ Run the following command to build the Docker image:
 docker build -t pkcs11-proxy-opencryptoki:s390x-1.0.0 -f Dockerfile .
 ```
 
+This command is also provided in the [docker-image-build.sh](./docker-image/docker-image-build.sh) file.
+
 ## Push Docker image
 
 Run the following set of commands to push the Docker image to your Docker Hub repository.
 
-Replace:
+Replace the following variables in the commands:
 
-  - `<DOCKER_HUB>` with the address your Docker server.
-  - `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
-  - `<DOCKER_HUB_PWD>` with your Docker Hub password.
+- **`<DOCKER_HUB>`**: Specify the address of your Docker server.
+- **`<DOCKER_HUB_ID>`**: Specify your Docker Hub username or email address.
+- **`<DOCKER_HUB_PWD>`**: Specify your Docker Hub password.
 
 ```
 DOCKER_HUB=<DOCKER_HUB>
@@ -99,18 +99,22 @@ docker login -u <DOCKER_HUB_ID> -p <DOCKER_HUB_PWD> $DOCKER_HUB
 docker push $DOCKER_HUB/pkcs11-proxy-opencryptoki:s390x-1.0.0
 ```
 
-Examples of these commands are provided in the following files:
+These commands are also provided in the [docker-image-push.sh](./docker-image/docker-image-push.sh) file.
 
-- [docker-image-build.sh](./docker-image/docker-image-build.sh)
-- [docker-image-push.sh](./docker-image/docker-image-push.sh)
-
-# Deploy the image to Kubernetes
+# Step 2. Deploy the image to Kubernetes
 
 After you have built the image, there are a few additional tasks you need to perform before you can deploy the Docker image.
 
 ## Create a Docker registry secret
 
 Run the following commands to create a Kubernetes secret named `ibprepo-key-secret` to store your Docker image pull secret.
+
+Replace the following variables in the commands:
+
+- **`<DOCKER_HUB>`**: Specify the address your Docker server.
+- **`<DOCKER_HUB_ID>`**: Specify your Docker Hub username or email address.
+- **`<DOCKER_HUB_PWD>`**: Specify your Docker Hub password.
+- **`<NAMESPACE>`**: Specify the name of your Kubernetes namespace.
 
 ```
 DOCKER_HUB=<DOCKER_HUB>
@@ -121,15 +125,9 @@ namespace=<NAMESPACE>
 kubectl create secret docker-registry ibprepo-key-secret --docker-server=$DOCKER_HUB   --docker-username=$DOCKER_HUB_ID --docker-password=$DOCKER_HUB_PWD --docker-email=$DOCKER_HUB_ID -n $namespace
 ```
 
-Replacing:
-- `<DOCKER_HUB>` with the address your Docker server.
-- `<DOCKER_HUB_ID>` with your Docker Hub username or email address.
-- `<DOCKER_HUB_PWD>` with your Docker Hub password.
-- `<NAMESPACE>` with name of your Kubernetes namespace.
-
 ## Create an image pull policy
 
-Edit the [image-policy.yaml](./deployment/image-policy.yaml) file replacing `<DOCKER_HUB>` with the address your Docker server.
+Edit the [image-policy.yaml](./deployment/image-policy.yaml) file, replacing **`<DOCKER_HUB>`** with the address your Docker server.
 
 ### `imagePolicy.yaml` template
 ```yaml
@@ -142,17 +140,15 @@ spec:
   - name: <DOCKER_HUB>
 ```
 
-Run the following command to apply this policy to your Kubernetes namespace:
+Run the following command to apply this policy to your Kubernetes namespace, replacing **`<NAMESPACE>`** with the name of your Kubernetes namespace.
 
 ```
 kubectl apply -f image-policy.yaml -n <NAMESPACE>
 ```
-Replacing:
-- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 ## Create PVC
 
-Edit the [opencryptoki-token-pvc.yaml](./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the `<STORAGECLASS_NAME>` variable.
+Edit the [opencryptoki-token-pvc.yaml](./deployment/opencryptoki-token-pvc.yaml) file to provide the name of the storage class for your PVC in the **`<STORAGECLASS_NAME>`** variable.
 
 ### `opencryptoki-token-pvc.yaml` template
 ```yaml
@@ -169,14 +165,11 @@ spec:
   storageClassName: <STORAGECLASS_NAME>
 ```
 
-Run the following command to apply this PVC to your Kubernetes namespace:
+Run the following command to apply this PVC to your Kubernetes namespace, replacing **`<NAMESPACE>`** with the name of your Kubernetes namespace.
 
 ```
 kubectl apply -f opencryptoki-token-pvc.yaml -n <NAMESPACE>
 ```
-
-Replacing:
-- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 ## Create Security Policy
 
@@ -186,7 +179,7 @@ The Security Policy is based on three configuration files:
 - [clusterrolebinding.yaml](./deployment/clusterrolebinding.yaml)
 
 No modifications are required for the `psp.yaml` or the `clusterrole.yaml` files. But you do need to edit the [clusterrolebinding.yaml](./deployment/clusterrolebinding.yaml) file and replace
-`<NAMESPACE>` with the namespace of your Kubernetes cluster.
+**`<NAMESPACE>`** with the name of your Kubernetes namespace.
 
 ### `clusterrolebinding.yaml` template
 ```yaml
@@ -214,49 +207,46 @@ kubectl apply -f clusterrolebinding.yaml
 
 ## Create label for Kubernetes node
 
-Create a label for the Kubernetes node where the IBM HSM card is installed. The label and value are required in a subsequent step when you deploy the image to your Kubernetes cluster.
+Create a label for the Kubernetes node where the IBM HSM cryptographic card is installed. The label and value are required in a subsequent step when you deploy the Docker image to your Kubernetes cluster.
 
 1. Run the following command to get information about all the nodes in cluster:
 
-```sh
-kubectl get nodes
-```
+  ```sh
+  kubectl get nodes
+  ```
 
-2. Create a label for your node, on which a IBM HSM card is installed
+2. Create a label for your node on which an IBM HSM cryptographic card is installed.
 
-```sh
-kubectl label node <NODENAME> --overwrite=true <LABEL-KEY>=<LABEL-VALUE>
-```
+  ```sh
+  kubectl label node <NODENAME> --overwrite=true <LABEL-KEY>=<LABEL-VALUE>
+  ```
 
-Replacing:
-- `<NODENAME>` with the name of the node in your cluster where the HSM cryptographic card is installed.
-- `<LABEL-KEY>` with the label you want to assign to this node, for example: `HSM`.
-- `<LABEL-VALUE>` with the value of the label key, for example `installed`.   
+  Replace the following variables in the command:
+  - **`<NODENAME>`**: Specify the name of the node in your cluster where the HSM cryptographic card is installed.
+  - **`<LABEL-KEY>`**: Specify the label that you want to assign to this node, for example, `HSM`.
+  - **`<LABEL-VALUE>`**: Specify the value of the label key, for example, `installed`.   
 
-**Important:** Record the `<LABEL-KEY>`:`<LABEL-VALUE>` pair to provide it in a subsequent step.
+  **Important:** Record the `<LABEL-KEY>`:`<LABEL-VALUE>` pair to provide it in a subsequent step.
 
-For example:
-```
-kubectl label node worker1 --overwrite=true HSM=installed
-```
+  For example:
+  ```
+  kubectl label node worker1 --overwrite=true HSM=installed
+  ```
 
-3. Verify that the label was created successfully by running the following command:
+3. Verify that the label was created successfully by running the following command, replacing **`<NODENAME>`** with the name of the node in your cluster where the HSM cryptographic card is installed.
 
-```sh
-kubectl get node <NODENAME> --show-labels=true
-```
-Replacing:
-- `<NODENAME>` with the name of the node in your cluster where the HSM cryptographic card is installed.
-
+  ```sh
+  kubectl get node <NODENAME> --show-labels=true
+  ```
 
 ## Deploy the image
 
 Edit the [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
 
-Replace:
-- `<IBPREPO-KEY-SECRET>` with the name of the docker-registry secret that you created in a previous [step](#create-a-docker-registry-secret). For example, `ibprepo-key-secret`.
-- `<LABEL-KEY>`: `<LABEL-VALUE>`: with the label of the Kubernetes node where the cryptographic card is installed, from the previous [step](#create-label-for-kubernetes-node).
-- `<IMAGE-TAG>` with the image tag that was created in the [Push Docker image](#push-docker-image) step. For example, `pkcs11-proxy-opencryptoki:s390x-1.0.0`.
+Replace the following variables in the file:
+- **`<IBPREPO-KEY-SECRET>`**: Specify the name of the docker-registry secret that you created in the [Create a Docker registry secret](#create-a-docker-registry-secret) step. For example, `ibprepo-key-secret`.
+- **`<LABEL-KEY>`**: **`<LABEL-VALUE>`**: Specify the label of the Kubernetes node where the cryptographic card is installed, from the [Create label for Kubernetes node](#create-label-for-kubernetes-node) step.
+- **`<IMAGE-TAG>`**: Specify the image tag that was created in the [Push Docker image](#push-docker-image) step. For example, `pkcs11-proxy-opencryptoki:s390x-1.0.0`.
 
 ### `pkcs11-proxy-opencryptoki.yaml` template
 
@@ -336,74 +326,20 @@ spec:
         emptyDir: {}
 ```
 
-**Note:** The port `2345` is hard-coded in this file but you can change it to suit your needs.
+**Note:** The port `2345` is hard-coded in this file, but you can change it to suit your needs.
 
-Run the following command to deploy the openCryptoki proxy to your Kubernetes cluster:
+Run the following command to deploy the openCryptoki proxy to your Kubernetes cluster, replacing **`<NAMESPACE>`** with the name of your Kubernetes namespace.
 
 ```
 kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <NAMESPACE>
 ```
-Replacing:
-- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 
-# Test your deployment
+# Step 3. Test your deployment
 
-Ensure that the PKCS #11 library `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine. Then run the pkcs11-tool to test the setup.
+After the deployment is completes, you can test and verify the deployment.
 
-Run the following command:
-```
-PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
-
-```
-
-Replacing:
-- `<IP_ADDRESS>:<PORT>`: with the value returned from these [instructions](#how-to-find-your-cluster-ip-address).
-- `<EP11_SLOT_TOKEN_LABEL>` with the value that you specified for the `EP11_SLOT_TOKEN_LABEL` in the `entrypoint.sh` file.
-- `<EP11_SLOT_USER_PIN>` with the value that you specified for the `EP11_SLOT_USER_PIN` in the `entrypoint.sh` file.
-
-For example:
-```
-PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
-
-```
-
-The output of this command should look similar to:
-
-```
-$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
-
-C_SeedRandom() and C_GenerateRandom():
-  seeding (C_SeedRandom) not supported
-  seems to be OK
-Digests:
-  all 4 digest functions seem to work
-  SHA-1: OK
-Signatures: not implemented
-Verify (currently only for RSA)
-  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813) -- non-RSA, skipping
-  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f) with 1 mechanism -- non-RSA, skipping
-  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656) with 1 mechanism -- non-RSA, skipping
-Unwrap: not implemented
-Decryption (currently only for RSA)
-  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813)  -- non-RSA, skipping
-  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f)  -- non-RSA, skipping
-  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656)  -- non-RSA, skipping
-No errors
-```
-
-If the slot is already in use by another session, you might see the following output, which is reasonable:
-
-```
-$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
-
-error: PKCS11 function C_Login failed: rv = CKR_USER_ALREADY_LOGGED_IN (0x100)
-Aborting.
-```
-
-**Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
-
-## How to find your cluster ip address
+## Find your cluster ip address
 
 When you test your HSM, you need to provide the `<IP_ADDRESS>` and `<PORT>` of your HSM's PKCS #11 proxy.
 When all of your IBM Blockchain Platform components (CA, peer, ordering nodes) are local to the cluster, you can use either the internal IP address and port or external IP address and port. But if your blockchain components are not local to the cluster, then you must use the external IP address and port. These instructions describe how to get both pairs of values.
@@ -455,3 +391,57 @@ There are two pairs of values that can be used for the PKCS #11 Proxy `<IP_ADDRE
 `Internal-port` pair: `<CLUSTER-IP>:<Internal-PORT>`, from the Internal IP address and port example above, this value would be `10.0.163.235:2345`. This pair can be used when the IBM Blockchain Platform components (CA, peer, ordering node) are deployed in the same cluster.
 
 `External-port` pair: `<Master-node-IP>:<External-PORT>`, from the external IP address example above, this value would be `9.47.152.235:30846`.  This pair would be used when the IBM Blockchain Platform components (CA, peer, ordering nodes) are deployed either in the same cluster or are NOT in the same cluster.
+
+## Run the `pkcs11-tool`
+
+Ensure that the PKCS #11 library `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine. Then, run the following command:
+```
+PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
+
+```
+
+Replace the following variables in the command:
+- **`<IP_ADDRESS>:<PORT>`**: Specify the value returned from the [Find your cluster IP address](#how-to-find-your-cluster-ip-address) step.
+- **`<EP11_SLOT_TOKEN_LABEL>`**: Specify the value that you specified for the `EP11_SLOT_TOKEN_LABEL` variable in the `entrypoint.sh` file.
+- **`<EP11_SLOT_USER_PIN>`**: Specify the value that you specified for the `EP11_SLOT_USER_PIN` variable in the `entrypoint.sh` file.
+
+For example:
+```
+PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
+
+```
+
+The output of this command should look similar to:
+
+```
+$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
+
+C_SeedRandom() and C_GenerateRandom():
+  seeding (C_SeedRandom) not supported
+  seems to be OK
+Digests:
+  all 4 digest functions seem to work
+  SHA-1: OK
+Signatures: not implemented
+Verify (currently only for RSA)
+  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813) -- non-RSA, skipping
+  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f) with 1 mechanism -- non-RSA, skipping
+  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656) with 1 mechanism -- non-RSA, skipping
+Unwrap: not implemented
+Decryption (currently only for RSA)
+  testing key 0 (05f67dba7b52cadc23164f7126b40a54f2772a31d9d9ffeb5f71225fe19f4813)  -- non-RSA, skipping
+  testing key 1 (467d6c353163e5b3c8571efda38102daa619f6cf48fc78674cb57f409d2f980f)  -- non-RSA, skipping
+  testing key 2 (411761070a0aa7e80654a626ecaf908f9e56ec418f653c41ff0d1ff1dec30656)  -- non-RSA, skipping
+No errors
+```
+
+If the slot is already in use by another session, you might see the following output, which is reasonable:
+
+```
+$ PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
+
+error: PKCS11 function C_Login failed: rv = CKR_USER_ALREADY_LOGGED_IN (0x100)
+Aborting.
+```
+
+**Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
