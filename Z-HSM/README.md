@@ -7,7 +7,7 @@ In order for your IBM Blockchain Platform nodes to use your IBM Z openCryptoki H
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
 - These instructions assume you are comfortable with Kubernetes and `kubectl` commands.
-- You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you know the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
+- You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you have the values of the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
 # Step 1. Build and push PKCS #11 proxy image
 
@@ -225,8 +225,6 @@ Create a label for the Kubernetes node where the IBM HSM cryptographic card is i
   - **`<LABEL-KEY>`**: Specify the label that you want to assign to this node, for example, `HSM`.
   - **`<LABEL-VALUE>`**: Specify the value of the label key, for example, `installed`.   
 
-  **Important:** Record the `<LABEL-KEY>`:`<LABEL-VALUE>` pair to provide it in a subsequent step.
-
   For example:
   ```
   kubectl label node worker1 --overwrite=true HSM=installed
@@ -237,10 +235,11 @@ Create a label for the Kubernetes node where the IBM HSM cryptographic card is i
   ```sh
   kubectl get node <NODENAME> --show-labels=true
   ```
+**Important:** Record the values of the `<LABEL-KEY>`:`<LABEL-VALUE>` pair to provide it in a subsequent step.
 
 ## Deploy the image
 
-Edit the [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki.yaml) file and provide the values from your own environment:
+The [pkcs11-proxy-opencryptoki.yaml](./deployment/pkcs11-proxy-opencryptoki.yaml) is used to deploy the image to your Kubernetes cluster. It contains the configuration information for the Docker image, the PKCS #11 proxy, and openCryptoki settings. Edit the file and provide the values from your own environment:
 
 Replace the following variables in the file:
 - **`<IBPREPO-KEY-SECRET>`**: Specify the name of the docker-registry secret that you created in the [Create a Docker registry secret](#create-a-docker-registry-secret) step. For example, `ibprepo-key-secret`.
@@ -366,13 +365,12 @@ Look for the row that contains the `master` node. In the example above, the `mas
 
 ### INTERNAL IP address and port
 
-Now run the following command to get the CLUSTER-IP address and the internal and external port of the service.
+Now run the following command to get the CLUSTER-IP address and the internal and external port of the service, replacing
+**`<NAMESPACE>`** with name of your Kubernetes namespace.
 
 ```sh
 kubectl get service pkcs11-proxy -n <NAMESPACE>
 ```
-Replacing:
-- `<NAMESPACE>` with name of your Kubernetes namespace.
 
 For example:
 ```sh
