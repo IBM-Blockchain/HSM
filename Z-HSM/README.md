@@ -1,7 +1,6 @@
-# PKCS #11 deployment instructions
+# PKCS #11 deployment instructions for openCryptoki HSM
 
-This README describes how to build the PKCS #11 proxy into a Docker image and then deploy the image to your Kubernetes cluster so that your blockchain node can use the IBM Z openCryptoki HSM to manage its private key. After you complete this process, you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
-
+In order for your IBM Blockchain Platform nodes to use your IBM Z openCryptoki HSM to manage its private key, you must create a PKCS #11 proxy that allows the nodes to communicate with the HSM. This README describes how to build the PKCS #11 proxy into a Docker image and then deploy the image to your Kubernetes cluster. After you complete this process, you will have the values of the **HSM proxy endpoint**, **HSM Label**, and **HSM PIN** that are required by the IBM Blockchain Platform node to use the HSM.
 
 ## Before you begin
 
