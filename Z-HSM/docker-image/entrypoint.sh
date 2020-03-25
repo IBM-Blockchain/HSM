@@ -30,16 +30,14 @@ SLOT_SO_PIN=${EP11_SLOT_SO_PIN:-"98765432"}
 SLOT_USER_PIN=${EP11_SLOT_USER_PIN:-"98765432"}
 
 EXISTED_LABEL=$(pkcsconf -t | grep -w ${SLOT_TOKEN_LABEL})
-if [ -z "$EXISTED_LABEL" ] 
+if [ -z "$EXISTED_LABEL" ]
 then
   echo "initailized slot: "${SLOT_NO}
   printf "87654321\n${SLOT_TOKEN_LABEL}\n" | pkcsconf -I -c ${SLOT_NO}
   printf "87654321\n${SLOT_SO_PIN}\n${SLOT_SO_PIN}\n" | pkcsconf -P -c ${SLOT_NO}
   printf "${SLOT_SO_PIN}\n${SLOT_USER_PIN}\n${SLOT_USER_PIN}\n" | pkcsconf -u -c ${SLOT_NO}
-else 
-  echo "The slot already initailized!"
+else
+  echo "The slot already initialized!"
 fi
 
 pkcs11-daemon /usr/lib/s390x-linux-gnu/pkcs11/PKCS11_API.so
-
-
