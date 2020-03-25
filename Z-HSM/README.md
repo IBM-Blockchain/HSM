@@ -341,7 +341,7 @@ After the deployment is completes, you can test and verify the deployment.
 
 ## Find your cluster ip address
 
-When you test your HSM, you need to provide the `<IP_ADDRESS>` and `<PORT>` of your HSM's PKCS #11 proxy.
+Before you can test your HSM, you need to determine the `<IP_ADDRESS>` and `<PORT>` of your HSM's PKCS #11 proxy.
 When all of your IBM Blockchain Platform components (CA, peer, ordering nodes) are local to the cluster, you can use either the internal IP address and port or external IP address and port. But if your blockchain components are not local to the cluster, then you must use the external IP address and port. These instructions describe how to get both pairs of values.
 
 ### External IP address
@@ -401,7 +401,7 @@ PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/
 ```
 
 Replace the following variables in the command:
-- **`<IP_ADDRESS>:<PORT>`**: Specify the value returned from the [Find your cluster IP address](#how-to-find-your-cluster-ip-address) step.
+- **`<IP_ADDRESS>:<PORT>`**: Specify the value returned from the [Find your cluster IP address](#find-your-cluster-ip-address) step.
 - **`<EP11_SLOT_TOKEN_LABEL>`**: Specify the value that you specified for the `EP11_SLOT_TOKEN_LABEL` variable in the `entrypoint.sh` file.
 - **`<EP11_SLOT_USER_PIN>`**: Specify the value that you specified for the `EP11_SLOT_USER_PIN` variable in the `entrypoint.sh` file.
 
