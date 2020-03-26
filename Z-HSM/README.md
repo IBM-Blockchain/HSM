@@ -449,7 +449,6 @@ Aborting.
 **Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
 
 ### Install the pkcs11-tool
-{: #install-pkcs11-tool}
 
 Download the **pkcs11-proxy** source code and then build the source code to generate the PKCS #11 proxy library by running the following commands on your Linux OS:
 
