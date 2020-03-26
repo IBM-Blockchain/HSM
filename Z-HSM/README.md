@@ -6,16 +6,18 @@ In order for your IBM Blockchain Platform nodes to use your IBM Z openCryptoki H
 
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
-- These instructions assume you are comfortable with Kubernetes and `kubectl` commands.
+- These instructions assume you connect to your Kubernetes cluster and are comfortable to use `kubectl` commands.
 - You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you have the values of the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
 # Step 1. Build and push PKCS #11 proxy image
 
 Use these steps to build a Docker image that contains the PKCS #11 proxy, which enables communications with the openCryptoki HSM, and push it to your Docker registry.
 
+Switch to the `docker-image` subfolder when you complete the tasks in Step 1.
+
 ## Provide your HSM slot configuration
 
-Before you can build the Docker image, you need to provide your HSM slot label, initialization code, and PIN by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file.  
+Before you can build the Docker image, you need to provide your HSM slot label, initialization code, and PIN by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file. This file will be used as the entry point when you build the Docker image.
 
 Replace the following variables in the file:
 
@@ -59,7 +61,7 @@ SLOT_USER_PIN=${EP11_SLOT_USER_PIN:-"<EP11_SLOT_USER_PIN>"}
 EXISTED_LABEL=$(pkcsconf -t | grep -w ${SLOT_TOKEN_LABEL})
 if [ -z "$EXISTED_LABEL" ]
 then
-  echo "initailized slot: "${SLOT_NO}
+  echo "initialized slot: "${SLOT_NO}
   printf "87654321\n${SLOT_TOKEN_LABEL}\n" | pkcsconf -I -c ${SLOT_NO}
   printf "87654321\n${SLOT_SO_PIN}\n${SLOT_SO_PIN}\n" | pkcsconf -P -c ${SLOT_NO}
   printf "${SLOT_SO_PIN}\n${SLOT_USER_PIN}\n${SLOT_USER_PIN}\n" | pkcsconf -u -c ${SLOT_NO}
@@ -82,7 +84,7 @@ This command is also provided in the [docker-image-build.sh](./docker-image/dock
 
 ## Push Docker image
 
-Run the following set of commands to push the Docker image to your Docker Hub repository.
+Connect to your Docker Hub and then run the following set of commands to push the Docker image to your Docker Hub repository.
 
 Replace the following variables in the commands:
 
@@ -103,6 +105,8 @@ These commands are also provided in the [docker-image-push.sh](./docker-image/do
 # Step 2. Deploy the image to Kubernetes
 
 After you have built the image, there are a few additional tasks you need to perform before you can deploy the Docker image.
+
+Switch to the `deployment` subfolder when you complete the tasks in Step 2.
 
 ## Create a Docker registry secret
 
@@ -163,6 +167,8 @@ spec:
       storage: 1Gi
   storageClassName: <STORAGECLASS_NAME>
 ```
+
+**Note:** 1Gi is default value set for storage that PKCS #11 proxy uses. You can modify it in the `opencryptoki-token-pvc.yaml` file as required.
 
 Run the following command to apply this PVC to your Kubernetes namespace, replacing **`<NAMESPACE>`** with the name of your Kubernetes namespace.
 
@@ -391,10 +397,10 @@ There are two pairs of values that can be used for the PKCS #11 Proxy `<IP_ADDRE
 
 ## Run the `pkcs11-tool`
 
-Ensure that the PKCS #11 library `/usr/local/lib/libpkcs11-proxy.so` is installed on your local machine. Then, run the following command:
+Ensure that you [install the PKCS #11 library on your local machine](#install-pkcs11-tool), for example, at `/usr/local/lib/libpkcs11-proxy.so`. Then, run the following command:
+
 ```
 PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
-
 ```
 
 Replace the following variables in the command:
@@ -405,7 +411,6 @@ Replace the following variables in the command:
 For example:
 ```
 PKCS11_PROXY_SOCKET="tcp://9.47.152.235:30846`" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label PKCS11 --pin 87654312 -t
-
 ```
 
 The output of this command should look similar to:
@@ -442,3 +447,55 @@ Aborting.
 ```
 
 **Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
+
+### Install the `pkcs11-tool`
+{: #install-pkcs11-tool}
+
+Download the **pkcs11-proxy** source code and then build the source code to generate the PKCS #11 proxy library by running the following commands on your Linux OS:
+
+```
+apt-get update \
+    && apt-get -y install \
+    unzip \
+    make \
+    autoconf \
+    automake \
+    cmake \
+    build-essential \
+    libtool \
+    pkg-config \
+    libssl-dev \
+    libseccomp-dev \
+    libgflags-dev \
+    libgtest-dev \
+    libc++-helpers \
+    uuid-dev \
+    gcc \
+    g++ \
+    alien \
+    git
+
+git clone https://github.com/SUNET/pkcs11-proxy && \
+    cd pkcs11-proxy && \
+    git checkout ${VERSION} && \
+    cmake . && \
+    make && \
+    make install
+```
+
+If successfully, you can see the following information on your console:
+
+```
+Install the project...
+-- Install configuration: ""
+-- Installing: /usr/local/bin/pkcs11-daemon
+-- Installing: /usr/local/lib/libpkcs11-proxy.so.0.1
+-- Installing: /usr/local/lib/libpkcs11-proxy.so.0
+-- Installing: /usr/local/lib/libpkcs11-proxy.so
+```
+
+Then, run the following command to install `pkcs11-tool`:
+
+```
+sudo apt install opensc
+```
