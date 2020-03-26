@@ -6,7 +6,7 @@ In order for your IBM Blockchain Platform nodes to use your IBM Z openCryptoki H
 
 - The following instructions require a Docker Hub account.
 - You will need to provide a storage class for your PVC.
-- These instructions assume you connect to your Kubernetes cluster and are comfortable to use `kubectl` commands.
+- These instructions assume you can connect to your Kubernetes cluster and are comfortable to use `kubectl` commands.
 - You should have an [openCryptoki HSM](https://www.ibm.com/support/knowledgecenter/linuxonibm/com.ibm.linux.z.lxce/lxce_usingep11.html) configured for your Z environment and you have the values of the HSM **EP11_SLOT_TOKEN_LABEL**, **EP11_SLOT_SO_PIN**, and **EP11_SLOT_USER_PIN**.
 
 # Step 1. Build and push PKCS #11 proxy image
@@ -17,7 +17,7 @@ Switch to the `docker-image` subfolder when you complete the tasks in Step 1.
 
 ## Provide your HSM slot configuration
 
-Before you can build the Docker image, you need to provide your HSM slot label, initialization code, and PIN by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file. This file will be used as the entry point when you build the Docker image.
+Before you can build the Docker image, you need to provide your HSM slot label, initialization code, and PIN by editing the [`entrypoint.sh`](./docker-image/entrypoint.sh) file. This file is used to initialize the Docker container, by passing the required setup steps to the container.
 
 Replace the following variables in the file:
 
@@ -341,7 +341,7 @@ kubectl apply -f pkcs11-proxy-opencryptoki.yaml -n <NAMESPACE>
 
 # Step 3. Test your deployment
 
-After the deployment is completes, you can test and verify the deployment.
+After the deployment is complete, you can test and verify the configuration.
 
 ## Find your cluster ip address
 
@@ -397,7 +397,7 @@ There are two pairs of values that can be used for the PKCS #11 Proxy `<IP_ADDRE
 
 ## Run the `pkcs11-tool`
 
-Ensure that you [install the PKCS #11 library on your local machine](#install-pkcs11-tool), for example, at `/usr/local/lib/libpkcs11-proxy.so`. Then, run the following command:
+Ensure that you [install the pkcs11-tool](#install-the-pkcs11-tool) on your local machine, for example, at `/usr/local/lib/libpkcs11-proxy.so`. Then, run the following command:
 
 ```
 PKCS11_PROXY_SOCKET="tcp://<IP_ADDRESS>:<PORT>" pkcs11-tool --module=/usr/local/lib/libpkcs11-proxy.so --token-label <EP11_SLOT_TOKEN_LABEL> --pin <EP11_SLOT_USER_PIN> -t
@@ -448,7 +448,7 @@ Aborting.
 
 **Note:**  Save the address of the `PKCS11_PROXY_SOCKET` because it is required when you configure an IBM Blockchain Platform node to use this HSM. Namely it is the value of the **HSM proxy endpoint**.
 
-### Install the `pkcs11-tool`
+### Install the pkcs11-tool
 {: #install-pkcs11-tool}
 
 Download the **pkcs11-proxy** source code and then build the source code to generate the PKCS #11 proxy library by running the following commands on your Linux OS:
@@ -483,7 +483,7 @@ git clone https://github.com/SUNET/pkcs11-proxy && \
     make install
 ```
 
-If successfully, you can see the following information on your console:
+If successful, you can see the following information on your console:
 
 ```
 Install the project...
