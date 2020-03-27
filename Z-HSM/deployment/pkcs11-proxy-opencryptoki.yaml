@@ -37,7 +37,7 @@ spec:
       securityContext:
         privileged: true
       nodeSelector: 
-        master: 'true'
+        HSM: 'installed'
       containers:
       - name: proxy
         image: us.icr.io/ibp-temp/pkcs11-proxy-opencryptoki:s390x-1.0.0
