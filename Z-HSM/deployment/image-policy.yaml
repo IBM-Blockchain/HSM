@@ -1,0 +1,8 @@
+
+apiVersion: securityenforcement.admission.cloud.ibm.com/v1beta1
+kind: ImagePolicy
+metadata:
+  name: image-policy-pkcs11-proxy
+spec:
+  repositories:
+  - name: us.icr.io/ibp-temp/*

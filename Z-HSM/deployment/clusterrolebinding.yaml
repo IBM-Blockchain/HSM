@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pkcs11-proxy-clusterrolebinding
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:serviceaccounts:pkcs11-proxy
+roleRef:
+  kind: ClusterRole
+  name: pkcs11-proxy-clusterrole
+  apiGroup: rbac.authorization.k8s.io
