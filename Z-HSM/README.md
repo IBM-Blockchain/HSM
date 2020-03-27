@@ -476,7 +476,6 @@ apt-get update \
 
 git clone https://github.com/SUNET/pkcs11-proxy && \
     cd pkcs11-proxy && \
-    git checkout ${VERSION} && \
     cmake . && \
     make && \
     make install
