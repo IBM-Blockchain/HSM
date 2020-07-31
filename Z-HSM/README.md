@@ -497,3 +497,124 @@ Then, run the following command to install `pkcs11-tool`:
 ```
 sudo apt install opensc
 ```
+
+# Deploy Multiple Pkcs11-proxies on the same Kubernetes Cluster
+
+Following above #Step-2, and perform below updates in scripts
+
+## Create PVC with different name, like `opencryptoki-token-pvc-2nd`
+
+```yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: opencryptoki-token-pvc-2nd
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: <STORAGECLASS_NAME>
+```
+
+## Create label for the node, on which the 2nd pkcs11-proxy deploys
+
+## Update content in `pkcs11-proxy-opencryptoki.yaml`
+
+For service, fields required to update:
+
+```
+metadata.name
+metadata.lables.app
+spec.selector.app
+```
+
+For deployment, fields required to update:
+
+```
+metadata.name
+metadata.lables.app
+spec.selector.matchLabels.app
+spec.template.metadata.lables.app
+spec.template.spec.nodeSelector
+spec.template.spec.volumes.persistentVolumeClaim.claimName
+```
+
+### `pkcs11-proxy-opencryptoki.yaml` template
+
+```yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pkcs11-proxy-2nd
+  labels:
+    app: pkcs11-2nd
+spec:
+  ports:
+  - name: http
+    port: 2345
+    protocol: TCP
+    targetPort: 2345
+  selector:
+    app: pkcs11-2nd
+  type: NodePort
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pkcs11-proxy-2nd
+  labels:
+    app: pkcs11-2nd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pkcs11-2nd
+  template:
+    metadata:
+      labels:
+        app: pkcs11-2nd
+    spec:
+      imagePullSecrets:
+        - name: <IBPREPO-KEY-SECRET>
+      securityContext:
+        privileged: true
+      nodeSelector:
+        <LABEL-KEY>: <LABEL-VALUE>
+      containers:
+      - name: proxy
+        image: <IMAGE-TAG>
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 2345
+        securityContext:
+          privileged: true
+          allowPrivilegeEscalation: true
+          readOnlyRootFilesystem: false
+        livenessProbe:
+          tcpSocket:
+            port: 2345
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          tcpSocket:
+            port: 2345
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: token-object-storage
+          mountPath: /var/lib/opencryptoki
+        - name: opencryptoki-config
+          mountPath: /etc/opencryptoki
+      volumes:
+      - name: token-object-storage
+        persistentVolumeClaim:
+          claimName: opencryptoki-token-pvc-2nd
+      - name: opencryptoki-config
+        emptyDir: {}
+```
