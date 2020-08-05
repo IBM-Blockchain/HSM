@@ -520,7 +520,14 @@ spec:
 
 ## Create label for the node, on which the 2nd pkcs11-proxy deploys
 
-## Update content in `pkcs11-proxy-opencryptoki.yaml`
+```
+kubectl label node 2nd-node-ip-x.x.x.x --overwrite=true hsm=NewLabel-2nd
+```
+
+## Create a new script `pkcs11-proxy-opencryptoki-2nd.yaml`
+
+Copy content of file `pkcs11-proxy-opencryptoki.yaml` into this new script and then update as below
+
 
 For service, fields required to update:
 
@@ -583,7 +590,7 @@ spec:
       securityContext:
         privileged: true
       nodeSelector:
-        <LABEL-KEY>: <LABEL-VALUE>
+        hsm: NewLabel-2nd
       containers:
       - name: proxy
         image: <IMAGE-TAG>
