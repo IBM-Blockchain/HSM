@@ -498,11 +498,14 @@ Then, run the following command to install `pkcs11-tool`:
 sudo apt install opensc
 ```
 
-# Deploy Multiple Pkcs11-proxies on the same Kubernetes Cluster
+# Deploying multiple PKCS #11 proxies on the same Kubernetes cluster
 
-Following above #Step-2, and perform below updates in scripts
+After completing step #2 above, you need to make the following updates to the scripts:
 
-## Create PVC with different name, like `opencryptoki-token-pvc-2nd`
+## Create a new PVC
+
+Create a new PVC with a different name, for example: `opencryptoki-token-pvc-2nd`.
+
 
 ```yaml
 kind: PersistentVolumeClaim
@@ -518,18 +521,17 @@ spec:
   storageClassName: <STORAGECLASS_NAME>
 ```
 
-## Create label for the node, on which the 2nd pkcs11-proxy deploys
+## Create a label for the node, on which the second pkcs11-proxy deploys
 
 ```
 kubectl label node 2nd-node-ip-x.x.x.x --overwrite=true hsm=NewLabel-2nd
 ```
 
-## Create a new script `pkcs11-proxy-opencryptoki-2nd.yaml`
+## Update content in `pkcs11-proxy-opencryptoki.yaml`
 
-Copy content of file `pkcs11-proxy-opencryptoki.yaml` into this new script and then update as below
+You need to add two new sections to the `pkcs11-proxy-opencryptoki.yaml` file for the the second proxy. Copy the existing content in the file and append it to the bottom of the file.
 
-
-For service, fields required to update:
+In the newly added `kind:service` section, you will need to update the following fields:
 
 ```
 metadata.name
@@ -548,7 +550,7 @@ spec.template.spec.nodeSelector
 spec.template.spec.volumes.persistentVolumeClaim.claimName
 ```
 
-### `pkcs11-proxy-opencryptoki.yaml` template
+For example, the newly added sections of the .yaml file would be similar to:
 
 ```yaml
 ---
