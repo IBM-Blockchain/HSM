@@ -539,8 +539,7 @@ metadata.lables.app
 spec.selector.app
 ```
 
-For deployment, fields required to update:
-
+In the newly added `kind:deployment` section, you will need to update the following fields:
 ```
 metadata.name
 metadata.lables.app
