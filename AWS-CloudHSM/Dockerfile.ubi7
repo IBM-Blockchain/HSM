@@ -1,0 +1,52 @@
+FROM registry.access.redhat.com/ubi7 as builder
+
+# add centos repo
+ADD centos7.repo /etc/yum.repos.d/centos.repo
+
+RUN yum -y update;
+
+RUN yum install -y \
+    gcc \
+    make \
+    cmake \
+    git \
+    libseccomp-devel \
+    openssl-devel;
+
+# build and install pkcs11-proxy
+RUN git clone https://github.com/SUNET/pkcs11-proxy.git \
+    && cd pkcs11-proxy \
+    && cmake . \
+    && make \
+    && make install;
+
+# proxy image
+FROM registry.access.redhat.com/ubi7
+
+# add centos repo
+ADD centos7.repo /etc/yum.repos.d/centos.repo
+
+RUN yum -y update;
+
+RUN yum install -y \
+    libseccomp \
+    libedit \
+    scl-utils \
+    rh-python36;
+
+# copy proxy
+COPY --from=builder /usr/local/bin/pkcs11-daemon /usr/local/bin/pkcs11-daemon
+
+# install AWS cloudhsm client
+RUN rpm -ivh https://s3.amazonaws.com/cloudhsmv2-software/CloudHsmClient/EL7/cloudhsm-client-latest.el7.x86_64.rpm \
+    && rpm -ivh https://s3.amazonaws.com/cloudhsmv2-software/CloudHsmClient/EL7/cloudhsm-client-pkcs11-latest.el7.x86_64.rpm;
+
+ENV PATH /opt/rh/rh-python36/root/usr/bin:$PATH
+ENV PKCS11_DAEMON_SOCKET tcp://0.0.0.0:2345
+
+# add entrypoint
+ADD docker-entrypoint-ubi7.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT [ "/usr/local/bin/docker-entrypoint.sh" ]
+
+CMD [ "pkcs11-daemon", "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so", "-"]
+
